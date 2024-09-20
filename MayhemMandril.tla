@@ -6,18 +6,19 @@ EXTENDS Naturals, Sequences
 
 CONSTANT 
     NumberOfPublishedMessages, \* How many message ids to generate in the model
+    SetOfQueueIds, \* Message Queues to create in the model -- e.g. {"Queue1"}
     SetOfMayhemServerIds, \* Mayhem Servers to create in the model -- e.g. {"Mayhem1"}
     UNSET \* Model Value
 
 VARIABLES
-    Operating, \* Bool
     QueueState, \* Sequence
     SetOfSeenMessages, \* Set
     MayhemServerState, \* Function?
+    ProcessLabels, \* Function of processes values -> labels
     OperationsLog \* Sequence
 
-operating_vars == <<QueueState, SetOfSeenMessages, MayhemServerState, OperationsLog>>
-vars == <<Operating, QueueState, SetOfSeenMessages, MayhemServerState, OperationsLog>>
+vars == <<ProcessLabels, QueueState, SetOfSeenMessages, MayhemServerState, OperationsLog>>
+ProcessSet == (SetOfQueueIds)
 
 \* Parameterized number of messages to 'publish' in the queue.
 SetOfMessageIds == 1..NumberOfPublishedMessages 
@@ -54,8 +55,7 @@ TypeInvariant ==
     /\ MayhemServerStateInvariant 
     /\ QueueStateInvariant 
     /\ OperationsLogInvariant 
-    /\ SeenMessagesInvariant 
-    /\ Operating \in BOOLEAN
+    /\ SeenMessagesInvariant
 
 (**)
 (* Additional Safety and Liveness Definitions *)
@@ -77,7 +77,7 @@ PublishedMessagesAreConsumedInvariant == AllMessagesPublished => AllMessagesCons
 (**)
 
 Init == \* Set starting values for all vars
-    /\ Operating = TRUE
+    /\ ProcessLabels = [self \in ProcessSet |-> "Publish"]
     /\ OperationsLog = <<>>
     /\ QueueState = <<>>
     /\ SetOfSeenMessages = {}
@@ -86,31 +86,27 @@ Init == \* Set starting values for all vars
             message |-> UNSET
         ]]
 
-Publish(messageId) == 
-    /\ Operating = TRUE
-    /\ UNCHANGED <<Operating, MayhemServerState>>
-    /\ OperationsLog' = Append(
-        OperationsLog, 
-        [
-            type |-> "Publish",
-            message |-> messageId
-        ])
-    /\ QueueState' = Append(QueueState, messageId)
-    /\ SetOfSeenMessages' = SetOfSeenMessages \union {messageId} \* TODO replace this with the MayhemServer
+Publish(self) == 
+    /\ ProcessLabels[self] = "Publish"
+    /\ ProcessLabels' = [ProcessLabels EXCEPT ![self] = "Done"]
+    /\ UNCHANGED <<MayhemServerState>>
+    /\ \E messageId \in SetOfMessageIds \ SetOfSeenMessages: 
+        /\ OperationsLog' = Append(
+            OperationsLog, 
+            [
+                type |-> "Publish",
+                message |-> messageId
+            ])
+        /\ QueueState' = Append(QueueState, messageId)
+        /\ SetOfSeenMessages' = SetOfSeenMessages \union {messageId} \* TODO replace this with the MayhemServer
 
-SystemWorking == 
-    IF AllMessagesConsumed /\ Operating = TRUE
-    THEN Operating' = FALSE /\ UNCHANGED operating_vars
-    ELSE \E messageId \in SetOfMessageIds \ SetOfSeenMessages: 
-        Publish(messageId)
+Terminating == \A self \in ProcessSet: ProcessLabels[self] = "Done" /\ UNCHANGED vars
 
-Terminating == Operating = FALSE /\ UNCHANGED vars
-
-Next == SystemWorking \/ Terminating
+Next == (\E self \in SetOfQueueIds: Publish(self)) \/ Terminating
 
 Spec == Init /\ [][Next]_vars
 
 =============================================================================
 \* Modification History
-\* Last modified Fri Sep 20 16:39:01 EDT 2024 by lewis
+\* Last modified Fri Sep 20 17:15:24 EDT 2024 by lewis
 \* Created Thu Sep 19 13:35:35 EDT 2024 by lewis
