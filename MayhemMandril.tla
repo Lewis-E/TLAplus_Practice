@@ -70,7 +70,7 @@ AllMessagesPublished ==
 AllMessagesConsumed == SetOfMessageIds \ SetOfSeenMessages = {}
             
 PublishedMessagesAreConsumedInvariant == AllMessagesPublished => AllMessagesConsumed
-\*Liveness == <>[](AllMessagesPublished /\ AllMessagesConsumed)
+Liveness == <>[](AllMessagesPublished /\ AllMessagesConsumed) 
 
 (**)
 (* Model Starts Here *)
@@ -104,9 +104,12 @@ Terminating == \A self \in ProcessSet: ProcessLabels[self] = "Done" /\ UNCHANGED
 
 Next == (\E self \in SetOfQueueIds: Publish(self)) \/ Terminating
 
-Spec == Init /\ [][Next]_vars
+Spec == 
+    /\ Init /\ [][Next]_vars
+    \* Add fairness to processes
+    /\ \A self \in SetOfQueueIds : WF_vars(Publish(self))
 
 =============================================================================
 \* Modification History
-\* Last modified Fri Sep 20 17:15:24 EDT 2024 by lewis
+\* Last modified Fri Sep 20 18:06:15 EDT 2024 by lewis
 \* Created Thu Sep 19 13:35:35 EDT 2024 by lewis
